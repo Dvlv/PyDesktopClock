@@ -3,6 +3,11 @@ import tkinter.ttk as ttk
 import threading
 import datetime
 
+from socket import AF_INET, SOCK_DGRAM
+import sys
+import socket
+import struct, time
+
 class CountingThread(threading.Thread):
     def __init__(self, master):
         super().__init__()
@@ -13,6 +18,7 @@ class CountingThread(threading.Thread):
         while True:
             if not self.force_quit:
                 self.main_loop()
+                time.sleep(0.5)
             elif self.force_quit:
                 del self.master.worker
                 return
@@ -21,10 +27,23 @@ class CountingThread(threading.Thread):
         return
 
     def main_loop(self):
-        now = datetime.datetime.now().time()
-        now_formatted = str(now).split('.')[0]
-        self.master.update_time_remaining(now_formatted)
+        host = b"pool.ntp.org"
+        port = 123
+        buf = 1024
+        address = (host,port)
+        msg = '\x1b' + 47 * '\0'
 
+        # reference time (in seconds since 1900-01-01 00:00:00)
+        TIME1970 = 2208988800 # 1970-01-01 00:00:00
+
+        # connect to server
+        client = socket.socket( AF_INET, SOCK_DGRAM)
+        client.sendto(msg.encode(), address)
+        msg, address = client.recvfrom( buf )
+
+        t = struct.unpack( "!12I", msg )[10]
+        t -= TIME1970
+        self.master.update_time_remaining(time.ctime(t).replace("  "," ").rsplit(" ")[-2])
 
 
 class Timer(tk.Tk):
@@ -32,7 +51,7 @@ class Timer(tk.Tk):
         super().__init__()
 
         self.title("The Time")
-        self.geometry("500x100")
+        self.geometry("400x100")
         self.resizable(False, False)
 
         style = ttk.Style()
